@@ -37,21 +37,6 @@ impl Color {
 const MAX_ITERATIONS: u8 = u8::MAX;
 const OUT_FILE_NAME: &str = "./mandelbrot.png";
 
-#[derive(Debug)]
-struct CoordinatesAndColors {
-    coordinates: Vec<(f64, f64)>,
-    color: Color,
-}
-
-impl CoordinatesAndColors {
-    fn new() -> Self {
-        Self {
-            coordinates: vec![],
-            color: Color::BLACK,
-        }
-    }
-}
-
 fn get_color_based_on_number_of_iterations(iterations: u8) -> Color {
     match iterations {
         0..=20 => Color::BLACK,
@@ -61,23 +46,36 @@ fn get_color_based_on_number_of_iterations(iterations: u8) -> Color {
     }
 }
 
-fn iterate(c: f64) -> CoordinatesAndColors {
-    if c < -2.0 || c > 2.0 {
-        return CoordinatesAndColors::new();
+/// z = (x, yi)
+/// |z|^2 = |x|^2 + |y|^2
+/// |z| = sqrt(|x|^2 + |y|^2)
+fn get_absolute_value_of_complex_number(complex: (f64, f64)) -> f64 {
+    let adjacent_cathet = complex.0.powi(2);
+    let opposite_cathet = complex.1.powi(2);
+    let hypotenuse_squared = adjacent_cathet + opposite_cathet;
+    hypotenuse_squared.sqrt()
+}
+
+/// z^2 = (x^2-y^2, 2xy)
+fn calculate_square_of_complex_number(complex: (f64, f64)) -> (f64, f64) {
+    let x = complex.0;
+    let y = complex.1;
+
+    (x.powi(2) - y.powi(2), 2.0 * x * y)
+}
+
+fn iterate(c: (f64, f64)) -> Color {
+    let mut iterations: u8 = 0;
+    if get_absolute_value_of_complex_number(c) > 2.0 {
+        return get_color_based_on_number_of_iterations(iterations);
     }
 
-    let mut coordinates: Vec<(f64, f64)> = vec![];
+    let mut z = (0.0, 0.0);
 
-    let mut z = c;
-    coordinates.push((0.0, 0.0)); // z0
-    coordinates.push((0.0, c)); // z1
-
-    let mut iterations: u8 = 0;
-
-    while z.abs() <= 2.0 {
+    while get_absolute_value_of_complex_number(z) <= 2.0 {
         iterations += 1;
-        let zn = z.powi(2) + c;
-        coordinates.push((z, zn));
+        let z_squared = calculate_square_of_complex_number(z);
+        let zn = (z_squared.0 + c.0, z_squared.1 + c.1);
         z = zn;
 
         if iterations >= MAX_ITERATIONS {
@@ -85,12 +83,10 @@ fn iterate(c: f64) -> CoordinatesAndColors {
         }
     }
 
-    let color = get_color_based_on_number_of_iterations(iterations);
-
-    CoordinatesAndColors { coordinates, color }
+    get_color_based_on_number_of_iterations(iterations)
 }
 
-fn plot(mandelbrot_set: Vec<CoordinatesAndColors>) {
+fn plot() {
     let root = BitMapBackend::new(OUT_FILE_NAME, (800, 600)).into_drawing_area();
 
     root.fill(&WHITE).unwrap();
@@ -116,13 +112,21 @@ fn plot(mandelbrot_set: Vec<CoordinatesAndColors>) {
     let (pw, ph) = (range.0.end - range.0.start, range.1.end - range.1.start);
     let (xr, yr) = (chart.x_range(), chart.y_range());
 
-    for CoordinatesAndColors { coordinates, color } in mandelbrot_set {
-        for coordinate in coordinates {
-            plotting_area
-                .draw_pixel(coordinate, &color.as_plotters_color())
-                .unwrap();
-        }
-    }
+    let step = (
+        (xr.end - xr.start) / pw as f64,
+        (yr.end - yr.start) / ph as f64,
+    );
+    (0..(pw * ph)).for_each(|k| {
+        let c = (
+            xr.start + step.0 * (k % pw) as f64,
+            yr.start + step.1 * (k / pw) as f64,
+        );
+        let color = iterate(c);
+
+        plotting_area
+            .draw_pixel(c, &color.as_plotters_color())
+            .unwrap();
+    });
 
     // To avoid the IO failure being ignored silently, we manually call the present function
     root.present().expect("Unable to write result to file, please make sure 'plotters-doc-data' dir exists under current dir");
@@ -135,15 +139,6 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut results = vec![];
-
-        let mut c: f64 = -2.0;
-        while c.abs() <= 2.0 {
-            let result = iterate(c);
-            results.push(result);
-            c += 0.01
-        }
-
-        plot(results);
+        plot();
     }
 }
