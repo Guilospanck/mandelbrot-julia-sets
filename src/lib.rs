@@ -1,11 +1,43 @@
-// fc(z) = z^2 + c
-// starts with z = 0;
-// fc(0) = z0 = 0
-// z1 = fc(fc(0)) = fc(0) = c
+#![allow(dead_code)]
 
-// bound: |c| <= 2; |fc(z)| <= 2
 use plotters::prelude::*;
 
+#[derive(Clone, Copy)]
+struct Complex(f64, f64);
+
+impl Complex {
+    /// z = (x, yi)
+    /// |z|^2 = |x|^2 + |y|^2
+    /// |z| = sqrt(|x|^2 + |y|^2)
+    fn get_absolute_value_of_complex_number(complex: Complex) -> f64 {
+        let adjacent_cathet = complex.0.powi(2);
+        let opposite_cathet = complex.1.powi(2);
+        let hypotenuse_squared = adjacent_cathet + opposite_cathet;
+        hypotenuse_squared.sqrt()
+    }
+
+    /// z^2 = (x^2-y^2, 2xy)
+    fn calculate_square_of_complex_number(complex: Complex) -> Complex {
+        let x = complex.0;
+        let y = complex.1;
+
+        Complex(x.powi(2) - y.powi(2), 2.0 * x * y)
+    }
+}
+
+impl From<Complex> for (f64, f64) {
+    fn from(val: Complex) -> Self {
+        (val.0, val.1)
+    }
+}
+
+#[allow(clippy::upper_case_acronyms)]
+enum Set {
+    MANDELBROT,
+    JULIA,
+}
+
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
 enum Color {
     BLACK,
@@ -15,15 +47,6 @@ enum Color {
 }
 
 impl Color {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Color::BLACK => "rgb(0,0,0)",
-            Color::YELLOW => "rgb(255, 255, 0)",
-            Color::GREEN => "rgb(0, 255, 0)",
-            Color::RED => "rgb(255, 0, 0)",
-        }
-    }
-
     fn as_plotters_color(&self) -> RGBColor {
         match self {
             Color::BLACK => RGBColor(0, 0, 0),
@@ -35,50 +58,39 @@ impl Color {
 }
 
 const MAX_ITERATIONS: u8 = u8::MAX;
-const OUT_FILE_NAME: &str = "./mandelbrot.png";
+const MANDELBROT_OUT_FILE_NAME: &str = "./mandelbrot.png";
+const JULIA_OUT_FILE_NAME: &str = "./julia.png";
 
 fn get_color_based_on_number_of_iterations(iterations: u8) -> Color {
     match iterations {
-        0..=20 => Color::BLACK,
+        0..=20 => Color::RED,
         21..=80 => Color::YELLOW,
         81..=160 => Color::GREEN,
-        161..=u8::MAX => Color::RED,
+        161..=u8::MAX => Color::BLACK,
     }
 }
 
-/// z = (x, yi)
-/// |z|^2 = |x|^2 + |y|^2
-/// |z| = sqrt(|x|^2 + |y|^2)
-fn get_absolute_value_of_complex_number(complex: (f64, f64)) -> f64 {
-    let adjacent_cathet = complex.0.powi(2);
-    let opposite_cathet = complex.1.powi(2);
-    let hypotenuse_squared = adjacent_cathet + opposite_cathet;
-    hypotenuse_squared.sqrt()
-}
-
-/// z^2 = (x^2-y^2, 2xy)
-fn calculate_square_of_complex_number(complex: (f64, f64)) -> (f64, f64) {
-    let x = complex.0;
-    let y = complex.1;
-
-    (x.powi(2) - y.powi(2), 2.0 * x * y)
-}
-
-fn iterate(c: (f64, f64)) -> Color {
+/// Julia sets differ from Mandelbrot in they change the `z` variable
+/// and not the `c`.
+///
+fn julia(mut z: Complex) -> Color {
     let mut iterations: u8 = 0;
-    if get_absolute_value_of_complex_number(c) > 2.0 {
+
+    if Complex::get_absolute_value_of_complex_number(z) > 2.0 {
         return get_color_based_on_number_of_iterations(iterations);
     }
 
-    let mut z = (0.0, 0.0);
+    // Random value to c
+    let c = Complex(0.38, 0.28);
 
-    while get_absolute_value_of_complex_number(z) <= 2.0 {
+    // fc(z) = z^2 + c
+    while Complex::get_absolute_value_of_complex_number(z) <= 2.0 {
         iterations += 1;
-        let z_squared = calculate_square_of_complex_number(z);
-        let zn = (z_squared.0 + c.0, z_squared.1 + c.1);
+        let z_squared = Complex::calculate_square_of_complex_number(z);
+        let zn = Complex(z_squared.0 + c.0, z_squared.1 + c.1);
         z = zn;
 
-        if iterations >= MAX_ITERATIONS {
+        if iterations == MAX_ITERATIONS {
             break;
         }
     }
@@ -86,8 +98,38 @@ fn iterate(c: (f64, f64)) -> Color {
     get_color_based_on_number_of_iterations(iterations)
 }
 
-fn plot() {
-    let root = BitMapBackend::new(OUT_FILE_NAME, (800, 600)).into_drawing_area();
+fn mandelbrot(c: Complex) -> Color {
+    let mut iterations: u8 = 0;
+
+    // Mandelbrot set is bounded by |fc(z)| <= 2, which is the same as bounding |c| <= 2
+    if Complex::get_absolute_value_of_complex_number(c) > 2.0 {
+        return get_color_based_on_number_of_iterations(iterations);
+    }
+
+    // initial z = 0
+    let mut z = Complex(0.0, 0.0);
+
+    // fc(z) = z^2 + c
+    while Complex::get_absolute_value_of_complex_number(z) <= 2.0 {
+        iterations += 1;
+        let z_squared = Complex::calculate_square_of_complex_number(z);
+        let zn = Complex(z_squared.0 + c.0, z_squared.1 + c.1);
+        z = zn;
+
+        if iterations == MAX_ITERATIONS {
+            break;
+        }
+    }
+
+    get_color_based_on_number_of_iterations(iterations)
+}
+
+fn plot(set: Set) {
+    let path = match set {
+        Set::MANDELBROT => MANDELBROT_OUT_FILE_NAME,
+        Set::JULIA => JULIA_OUT_FILE_NAME,
+    };
+    let root = BitMapBackend::new(path, (800, 600)).into_drawing_area();
 
     root.fill(&WHITE).unwrap();
 
@@ -117,20 +159,23 @@ fn plot() {
         (yr.end - yr.start) / ph as f64,
     );
     (0..(pw * ph)).for_each(|k| {
-        let c = (
-            xr.start + step.0 * (k % pw) as f64,
-            yr.start + step.1 * (k / pw) as f64,
+        let c = Complex(
+            xr.start + step.0 * (k % pw) as f64, // this goes back to zero once we reach the end of the width of the graph
+            yr.start + step.1 * (k / pw) as f64, // this breaks the line (goes to the next row) once it reaches the end of the width of the graph
         );
-        let color = iterate(c);
+        let color = match set {
+            Set::MANDELBROT => mandelbrot(c),
+            Set::JULIA => julia(c),
+        };
 
         plotting_area
-            .draw_pixel(c, &color.as_plotters_color())
-            .unwrap();
+            .draw_pixel(c.into(), &color.as_plotters_color())
+            .expect("Could not plot the graph. Something went wrong.");
     });
 
     // To avoid the IO failure being ignored silently, we manually call the present function
     root.present().expect("Unable to write result to file, please make sure 'plotters-doc-data' dir exists under current dir");
-    println!("Result has been saved to {}", OUT_FILE_NAME);
+    println!("Result has been saved to {}", path);
 }
 
 #[cfg(test)]
@@ -139,6 +184,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        plot();
+        plot(Set::MANDELBROT);
+        plot(Set::JULIA);
     }
 }
