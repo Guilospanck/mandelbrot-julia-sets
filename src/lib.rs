@@ -81,7 +81,7 @@ fn julia(mut z: Complex) -> Color {
     }
 
     // Random value to c
-    let c = Complex(0.38, 0.28);
+    let c = Complex(-0.79, 0.15);
 
     // fc(z) = z^2 + c
     while Complex::get_absolute_value_of_complex_number(z) <= 2.0 {
@@ -133,11 +133,16 @@ fn plot(set: Set) {
 
     root.fill(&WHITE).unwrap();
 
+    let cartesian_2d = match set {
+      Set::MANDELBROT => (-2.1f64..0.6f64, -1.2f64..1.2f64),
+      Set::JULIA => (-2.1f64..2.1f64, -1.2f64..1.2f64),
+  };
+
     let mut chart = ChartBuilder::on(&root)
         .margin(20)
         .x_label_area_size(10)
         .y_label_area_size(10)
-        .build_cartesian_2d(-2.1f64..0.6f64, -1.2f64..1.2f64)
+        .build_cartesian_2d(cartesian_2d.0, cartesian_2d.1)
         .unwrap();
 
     chart
